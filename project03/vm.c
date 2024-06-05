@@ -57,13 +57,15 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
 // Create PTEs for virtual addresses starting at va that refer to
 // physical addresses starting at pa. va and size might not
 // be page-aligned.
-static int
+int
 mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
 {
   char *a, *last;
   pte_t *pte;
 
+  // 가상 주소 va를 페이지크기 (PGSIZE)로 내림하여 페이지 경계에 맞춥니다.
   a = (char*)PGROUNDDOWN((uint)va);
+  // 주어진 크기(size)를 반영하여 마지막 가상주소 역시 페이지 경계에 맞춥니다.
   last = (char*)PGROUNDDOWN(((uint)va) + size - 1);
   for(;;){
     if((pte = walkpgdir(pgdir, a, 1)) == 0)

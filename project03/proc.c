@@ -15,10 +15,12 @@ struct {
 static struct proc *initproc;
 
 int nextpid = 1;
+int nexttid = 1;
 extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
+void clear_subthreads(struct proc* curproc);
 
 void
 pinit(void)
@@ -160,16 +162,23 @@ growproc(int n)
 {
   uint sz;
   struct proc *curproc = myproc();
+  struct proc* main;
 
-  sz = curproc->sz;
+  if(curproc->tid == 0)
+    main = curproc;
+  else
+    main = curproc->main;
+
+  sz = main->sz;
   if(n > 0){
-    if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
+    if((sz = allocuvm(main->pgdir, sz, sz + n)) == 0)
       return -1;
   } else if(n < 0){
-    if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
+    if((sz = deallocuvm(main->pgdir, sz, sz + n)) == 0)
       return -1;
   }
-  curproc->sz = sz;
+  main->sz = sz;
+
   switchuvm(curproc);
   return 0;
 }
@@ -183,12 +192,10 @@ fork(void)
   int i, pid;
   struct proc *np;
   struct proc *curproc = myproc();
-
   // Allocate process.
   if((np = allocproc()) == 0){
     return -1;
   }
-
   // Copy process state from proc.
   if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
     kfree(np->kstack);
@@ -197,9 +204,14 @@ fork(void)
     return -1;
   }
   np->sz = curproc->sz;
-  np->parent = curproc;
+  if(np->tid != 0){
+    //cprintf("A thread has forked. Set parent of new process to main process thread.\n");
+    np->parent = curproc->main;
+  }
+  else
+    np->parent = curproc;
+  // np->main = np;
   *np->tf = *curproc->tf;
-
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
@@ -209,7 +221,6 @@ fork(void)
   np->cwd = idup(curproc->cwd);
 
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
-
   pid = np->pid;
 
   acquire(&ptable.lock);
@@ -217,7 +228,6 @@ fork(void)
   np->state = RUNNABLE;
 
   release(&ptable.lock);
-
   return pid;
 }
 
@@ -234,6 +244,8 @@ exit(void)
   if(curproc == initproc)
     panic("init exiting");
 
+  clear_subthreads(curproc);
+
   // Close all open files.
   for(fd = 0; fd < NOFILE; fd++){
     if(curproc->ofile[fd]){
@@ -249,9 +261,14 @@ exit(void)
 
   acquire(&ptable.lock);
 
-  // Parent might be sleeping in wait().
-  wakeup1(curproc->parent);
-
+  if(curproc->main == 0){
+    // Parent might be sleeping in wait().
+    wakeup1(curproc->parent);
+  }
+  else{
+    curproc->main->killed = 1;
+    wakeup1(curproc->main);
+  }
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == curproc){
@@ -483,7 +500,7 @@ kill(int pid)
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->pid == pid){
+    if(p->pid == pid && p->tid ==0){
       p->killed = 1;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
@@ -531,4 +548,257 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+// Create a new thread copying the main thread p.
+// User Same pgdir with the main thread.
+// Allocate two more pages in order to create new stack for this thread.
+// Return 0 if successful, otherwise -1/
+int
+thread_create(thread_t* thread, void *(*start_routine)(void *), void *arg)
+{
+  int i;
+  struct proc *np;
+  struct proc *curproc = myproc();
+  struct proc *main;
+
+  pde_t * pgdir;
+  uint sbase;
+  uint sz;
+  uint sp;
+  uint content[2];
+
+  if(!(curproc->main)) main = curproc;
+  else main = curproc->main;
+
+  // 프로세스 할당
+  if((np=allocproc()) ==0) return -1;
+  nextpid--;
+
+  // thread를 의 초기값 할당 ㅇㅇ
+  np->tid = nexttid++;
+  *thread = np->tid;
+
+  np->main = main;
+  np->parent = main;
+  np->pid = main->pid;
+  
+  pgdir = main->pgdir;
+  sbase = main->sz;
+  sz = main->sz;
+  main->sz += 2 * PGSIZE;
+
+  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0){
+    np->state = UNUSED;
+    return -1;
+  }
+
+// User stack 영역 확보 첫번째 페이지는 접근 불가 설정
+  clearpteu(pgdir,  (char*)(sz - 2*PGSIZE));
+  content[0] = 0xffffffff; // Fake return address. Never return.
+  content[1] = (uint)arg;
+
+  sp = sz - 8;
+  if(copyout(pgdir, sp, content, 8) != 0){
+    panic("create_tread");
+  }
+
+  // thread 이므로 동일한 page dir 가지도록 설정 기존 process와
+  // stack 영역은 대신 분리되어야한다. 
+  np->pgdir = pgdir;
+
+  np->sz = main->sz;
+  np->sbase = sbase; // sbase 분리
+
+  *np->tf = *main->tf;
+  
+  np->tf->eip = (uint)start_routine;
+  np->tf->esp = sp;
+
+  for(i = 0; i < NOFILE; i++)
+    if(main->ofile[i])
+      np->ofile[i] = filedup(main->ofile[i]); // Incrementing file ref count
+  np->cwd = idup(main->cwd);
+
+  safestrcpy(np->name, main->name, sizeof(main->name));
+
+  acquire(&ptable.lock);
+
+  np->state = RUNNABLE;
+  release(&ptable.lock);
+
+  return 0;
+}
+// Clear given thread.
+// Free kstack and change state into UNUSED
+// Needed ptable lock before calling
+void thread_clear(struct proc* p){
+  // Do not free pgdir because it is shared with other threads.
+  // freevm(p->pgdir);
+  kfree(p->kstack);
+  p->kstack = 0;
+  p->pid = 0;
+  p->tid = 0;
+  p->main = 0;
+  p->parent = 0;
+  p->name[0] = 0;
+  p->killed = 0;
+  p->state = UNUSED;
+}
+
+// 현재 thread 종료 
+// 종료된 thread는 좀비상태로 남는다. 
+// thread  join 이 호출되어서 exit 되기전까지 .. 남음 ...
+void
+thread_exit(void *retval)
+{
+  struct proc *curproc = myproc();
+  int fd;
+
+  if(curproc == initproc)
+    panic("init exiting");
+
+  // Save return value.
+  curproc->retval = retval;
+
+  // Using fileclose, decrement file ref count by 1
+  // Files won't be closed because main thread has ref count.
+  for(fd = 0; fd < NOFILE; fd++){
+    if(curproc->ofile[fd]){
+      fileclose(curproc->ofile[fd]);
+      curproc->ofile[fd] = 0;
+    }
+  }
+
+  begin_op();
+  iput(curproc->cwd);
+  end_op();
+  curproc->cwd = 0;
+
+  acquire(&ptable.lock);
+
+  // Main thread might be sleeping in thread_join().
+  wakeup1(curproc->main);
+
+  // Jump into the scheduler, never to return.
+  curproc->state = ZOMBIE;
+  sched();
+  panic("zombie exit");
+}
+
+// Wait for a sub thread to exit and save its return value.
+// Return 0 if successfull.
+// Return -1 if thread with given ID is not found.
+int
+thread_join(thread_t thread, void** retval)
+{
+  struct proc *p;
+  int found;
+  struct proc *curproc = myproc();
+  
+  acquire(&ptable.lock);
+  for(;;){
+    // Scan through table looking for exited thread with given thread ID.
+    found = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->tid != thread)
+        continue;
+      found = 1;
+      if(p->state == ZOMBIE){
+        // Found the one.
+        // Put return value that saved in thread_exit to retval
+        *retval = p->retval;
+        thread_clear(p);
+
+        release(&ptable.lock);
+        return 0;
+      }
+    }
+
+    // No point waiting if we cannot find the thread with given ID.
+    if(!found || curproc->killed){
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for sub thread to exit.  (See wakeup1 call in proc_exit.)
+    sleep(curproc, &ptable.lock);  //DOC: wait-sleep
+  }
+}
+
+void clear_subthreads(struct proc* curproc){
+  struct proc* p;
+  int havethreads;
+  if(curproc->tid == 0){
+    acquire(&ptable.lock);
+    for(;;){
+      // Scan through table looking for sub threads to be exited.
+      havethreads = 0;
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        if(p->pid != curproc->pid || p == curproc){
+          continue;
+        }
+        if(p->state == ZOMBIE){
+          // Found one.
+          thread_clear(p);
+        }
+        else{
+          havethreads++;
+          p->killed = 1;
+          wakeup1(p);
+        }
+      }
+
+      // No point waiting if we don't have any threads to exit.
+      if(havethreads == 0){
+        release(&ptable.lock);
+        break;
+      }
+
+      // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+      sleep(curproc, &ptable.lock);  //DOC: wait-sleep
+    }
+  }
+  else{
+    //cprintf("Not main thread.\n");
+  }
+}
+
+void kill_threads_except(int pid, struct proc* cp){
+  struct proc* p, * q;
+  int fd;
+
+  acquire(&ptable.lock);
+  
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid != pid || p == cp){
+      continue;
+    }
+    
+    for(q = ptable.proc; q < &ptable.proc[NPROC]; q++){
+      if(q->parent == p){
+        q->parent = initproc;
+        if(q->state == ZOMBIE)
+        wakeup1(initproc);
+      }
+    }
+     // Close all open files.
+    for(fd = 0; fd < NOFILE; fd++){
+      if(p->ofile[fd]){
+        fileclose(p->ofile[fd]);
+        p->ofile[fd] = 0;
+      }
+    }
+    release(&ptable.lock);
+
+    begin_op();
+    iput(p->cwd);
+    end_op();
+    p->cwd = 0;
+
+    acquire(&ptable.lock);
+
+    thread_clear(p);
+  }
+  release(&ptable.lock);
 }

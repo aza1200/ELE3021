@@ -19,6 +19,15 @@ exec(char *path, char **argv)
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
 
+  // cprintf("exec\n");
+  if(curproc->tid != 0){
+    curproc->tid = 0;
+    curproc->parent = curproc->main->parent;
+    curproc->main = 0;
+  }
+
+  kill_threads_except(curproc->pid, curproc);
+
   begin_op();
 
   if((ip = namei(path)) == 0){
@@ -28,6 +37,15 @@ exec(char *path, char **argv)
   }
   ilock(ip);
   pgdir = 0;
+
+  // if(curproc->pid > 2){
+  //   stati(ip, &st);
+
+  //   if(!(checkmod(st) & X_OK)){
+  //     //cprintf("Denined access to exec %s\n", path);
+  //     goto bad;
+  //   }
+  // }
 
   // Check ELF header
   if(readi(ip, (char*)&elf, 0, sizeof(elf)) != sizeof(elf))

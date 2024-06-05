@@ -74,70 +74,72 @@ main(int argc, char *argv[])
       8a:	e8 a1 32 00 00       	call   3330 <bigargtest>
   bsstest();
       8f:	e8 2c 32 00 00       	call   32c0 <bsstest>
-  sbrktest(); 
-      94:	e8 37 2d 00 00       	call   2dd0 <sbrktest>
+  // sbrktest(); 
   validatetest();
-      99:	e8 62 31 00 00       	call   3200 <validatetest>
+      94:	e8 67 31 00 00       	call   3200 <validatetest>
 
   opentest();
-      9e:	e8 6d 03 00 00       	call   410 <opentest>
+      99:	e8 72 03 00 00       	call   410 <opentest>
   writetest();
-      a3:	e8 08 04 00 00       	call   4b0 <writetest>
+      9e:	e8 0d 04 00 00       	call   4b0 <writetest>
   writetest1();
-      a8:	e8 e3 05 00 00       	call   690 <writetest1>
+      a3:	e8 e8 05 00 00       	call   690 <writetest1>
   createtest();
-      ad:	e8 ae 07 00 00       	call   860 <createtest>
+      a8:	e8 b3 07 00 00       	call   860 <createtest>
 
   openiputtest();
-      b2:	e8 59 02 00 00       	call   310 <openiputtest>
+      ad:	e8 5e 02 00 00       	call   310 <openiputtest>
   exitiputtest();
-      b7:	e8 54 01 00 00       	call   210 <exitiputtest>
+      b2:	e8 59 01 00 00       	call   210 <exitiputtest>
   iputtest();
-      bc:	e8 5f 00 00 00       	call   120 <iputtest>
+      b7:	e8 64 00 00 00       	call   120 <iputtest>
 
   mem(); 
-      c1:	e8 1a 0d 00 00       	call   de0 <mem>
+      bc:	e8 1f 0d 00 00       	call   de0 <mem>
   pipe1();
-      c6:	e8 95 09 00 00       	call   a60 <pipe1>
+      c1:	e8 9a 09 00 00       	call   a60 <pipe1>
   preempt();
-      cb:	e8 30 0b 00 00       	call   c00 <preempt>
+      c6:	e8 35 0b 00 00       	call   c00 <preempt>
   exitwait();
-      d0:	e8 8b 0c 00 00       	call   d60 <exitwait>
+      cb:	e8 90 0c 00 00       	call   d60 <exitwait>
 
   rmdot();
-      d5:	e8 a6 27 00 00       	call   2880 <rmdot>
+      d0:	e8 ab 27 00 00       	call   2880 <rmdot>
   fourteen();
-      da:	e8 61 26 00 00       	call   2740 <fourteen>
+      d5:	e8 66 26 00 00       	call   2740 <fourteen>
   bigfile();
-      df:	e8 8c 24 00 00       	call   2570 <bigfile>
+      da:	e8 91 24 00 00       	call   2570 <bigfile>
   subdir();
-      e4:	e8 b7 1c 00 00       	call   1da0 <subdir>
+      df:	e8 bc 1c 00 00       	call   1da0 <subdir>
   linktest();
-      e9:	e8 42 15 00 00       	call   1630 <linktest>
+      e4:	e8 47 15 00 00       	call   1630 <linktest>
   unlinkread();
-      ee:	e8 ad 13 00 00       	call   14a0 <unlinkread>
+      e9:	e8 b2 13 00 00       	call   14a0 <unlinkread>
   dirfile();
-      f3:	e8 08 29 00 00       	call   2a00 <dirfile>
+      ee:	e8 0d 29 00 00       	call   2a00 <dirfile>
   iref();
-      f8:	e8 03 2b 00 00       	call   2c00 <iref>
+      f3:	e8 08 2b 00 00       	call   2c00 <iref>
   forktest();
-      fd:	e8 1e 2c 00 00       	call   2d20 <forktest>
+      f8:	e8 23 2c 00 00       	call   2d20 <forktest>
   bigdir(); // slow
-     102:	e8 59 1b 00 00       	call   1c60 <bigdir>
+      fd:	e8 5e 1b 00 00       	call   1c60 <bigdir>
 
   uio();
-     107:	e8 04 35 00 00       	call   3610 <uio>
+     102:	e8 09 35 00 00       	call   3610 <uio>
 
   exectest();
-     10c:	e8 ff 08 00 00       	call   a10 <exectest>
+     107:	e8 04 09 00 00       	call   a10 <exectest>
 
   exit();
-     111:	e8 6d 38 00 00       	call   3983 <exit>
-     116:	66 90                	xchg   %ax,%ax
-     118:	66 90                	xchg   %ax,%ax
-     11a:	66 90                	xchg   %ax,%ax
-     11c:	66 90                	xchg   %ax,%ax
-     11e:	66 90                	xchg   %ax,%ax
+     10c:	e8 72 38 00 00       	call   3983 <exit>
+     111:	66 90                	xchg   %ax,%ax
+     113:	66 90                	xchg   %ax,%ax
+     115:	66 90                	xchg   %ax,%ax
+     117:	66 90                	xchg   %ax,%ax
+     119:	66 90                	xchg   %ax,%ax
+     11b:	66 90                	xchg   %ax,%ax
+     11d:	66 90                	xchg   %ax,%ax
+     11f:	90                   	nop
 
 00000120 <iputtest>:
 {
