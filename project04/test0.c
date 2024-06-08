@@ -11,14 +11,12 @@ main(int argc, char* argv[])
   int numvp = countvp();
   int numpp = countpp();
   int numptp = countptp();
-  //printf(1, "first: %d %d %d %d\n", numfp, numvp, numpp, numptp);
   sbrk(4096);
 
   int numfpa = countfp();
   int numvpa = countvp();
   int numppa = countpp();
   int numptpa = countptp();
-  //printf(1, "second: %d %d %d %d\n", numfpa, numvpa, numppa, numptpa);
   printf(1, "ptp: %d %d\n", numptp, numptpa);
   
   if((numvp == numpp) && (numvpa == numppa) && (numfp - numfpa == 1))

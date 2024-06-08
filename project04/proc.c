@@ -533,48 +533,99 @@ procdump(void)
   }
 }
 
+// int countptp(void) {
+//     struct proc *p;
+//     int count = 0;
+//     pde_t *pgdir;
+//     pte_t *pgtab;
+
+
+//     uint i;
+
+//     // 커널 페이지 테이블 순회
+//     pde_t *kpgdir = (pde_t*)KERNBASE;  // KERNBASE에 매핑된 페이지 디렉토리 포인터
+//     for (i = PDX(KERNBASE); i < PDX(0xFE000000); i++) {
+//         if (kpgdir[i] & PTE_P) {
+//             pte_t *pgtab = (pte_t*)P2V(PTE_ADDR(kpgdir[i]));
+//             for (uint j = 0; j < NPTENTRIES; j++) {
+//                 if (pgtab[j] & PTE_P) {
+//                     count++;  // 할당된 커널 페이지 카운트
+//                 }
+//             }
+//         }
+//     }
+
+//     acquire(&ptable.lock);  // 프로세스 테이블 락을 획득합니다.
+//     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+//         if (p->state == UNUSED) continue;  // 사용되지 않는 프로세스는 건너뜁니다.
+
+//         pgdir = p->pgdir;  // 프로세스의 페이지 디렉토리 주소를 가져옵니다.
+//         if (!pgdir) continue;
+
+//         // 사용자 공간의 시작 주소는 0이고, KERNBASE 직전까지 모든 페이지를 순회합니다.
+//         for (uint va = 0; va < KERNBASE; va += PGSIZE) {
+//             pde_t *pde = &pgdir[PDX(va)];
+//             if (*pde & PTE_P) {
+//                 pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
+//                 pte_t *pte = &pgtab[PTX(va)];
+//                 if (*pte & PTE_P) {
+//                     count++;  // 유효한 페이지만 카운트
+//                 }
+//             }
+//         }
+//     }
+//     release(&ptable.lock);  // 프로세스 테이블 락을 해제합니다.
+
+//     return count;  // 할당된 페이지의 총 수를 반환합니다.
+// }
+
+// int countptp(void) {
+//     struct proc *p;
+//     int count = -1;
+//     int first = 0;
+//     int check_point = 0;
+//     pde_t *pgdir;
+
+//     acquire(&ptable.lock);
+//     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+//         if (p->state == UNUSED) continue;
+//         if (!(pgdir = p->pgdir)) continue;
+
+//         // 각 프로세스의 페이지 디렉토리 페이지도 카운트
+//         //count++;  // 페이지 디렉토리 자체도 메모리 페이지를 사용합니다.
+
+//         // 페이지 디렉토리를 순회하며 페이지 테이블 카운트
+//         //PDX(KERNBASE)
+//         // 1024
+//         if (!first){
+//           check_point = 1024;
+//           first = 1;
+//         }
+//         else{
+//           check_point = PDX(KERNBASE);
+//         }
+//         for (uint i = 0; i < check_point; i++) {  // 1024는 페이지 디렉토리 엔트리 수
+//             if (pgdir[i] & PTE_P) {
+//                 count++;  // 각 유효한 페이지 디렉토리 엔트리는 하나의 페이지 테이블을 가리킵니다.
+//             }
+//         }
+//     }
+//     release(&ptable.lock);
+
+//     return count;  // 할당된 페이지 테이블의 총 수를 반환합니다.
+// }
+
 int countptp(void) {
-    struct proc *p;
-    int count = 0;
-    pde_t *pgdir;
-    pte_t *pgtab;
+  int count = 1; // 초기 pgdir 값 추가
+  pde_t *pgdir = myproc()->pgdir;
 
+  acquire(&ptable.lock);
+  for (uint i = 0; i < 1024; i++) {  // 1024는 페이지 디렉토리 엔트리 수
+      if (pgdir[i] & PTE_P) {
+          count++;  // 각 유효한 페이지 디렉토리 엔트리는 하나의 페이지 테이블을 가리킵니다.
+      }
+  }
+  release(&ptable.lock);
 
-    uint i;
-
-    // 커널 페이지 테이블 순회
-    pde_t *kpgdir = (pde_t*)KERNBASE;  // KERNBASE에 매핑된 페이지 디렉토리 포인터
-    for (i = PDX(KERNBASE); i < PDX(0xFE000000); i++) {
-        if (kpgdir[i] & PTE_P) {
-            pte_t *pgtab = (pte_t*)P2V(PTE_ADDR(kpgdir[i]));
-            for (uint j = 0; j < NPTENTRIES; j++) {
-                if (pgtab[j] & PTE_P) {
-                    count++;  // 할당된 커널 페이지 카운트
-                }
-            }
-        }
-    }
-
-    acquire(&ptable.lock);  // 프로세스 테이블 락을 획득합니다.
-    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-        if (p->state == UNUSED) continue;  // 사용되지 않는 프로세스는 건너뜁니다.
-
-        pgdir = p->pgdir;  // 프로세스의 페이지 디렉토리 주소를 가져옵니다.
-        if (!pgdir) continue;
-
-        // 사용자 공간의 시작 주소는 0이고, KERNBASE 직전까지 모든 페이지를 순회합니다.
-        for (uint va = 0; va < KERNBASE; va += PGSIZE) {
-            pde_t *pde = &pgdir[PDX(va)];
-            if (*pde & PTE_P) {
-                pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
-                pte_t *pte = &pgtab[PTX(va)];
-                if (*pte & PTE_P) {
-                    count++;  // 유효한 페이지만 카운트
-                }
-            }
-        }
-    }
-    release(&ptable.lock);  // 프로세스 테이블 락을 해제합니다.
-
-    return count;  // 할당된 페이지의 총 수를 반환합니다.
+  return count;  // 할당된 페이지 테이블의 총 수를 반환합니다.
 }
